@@ -6,7 +6,7 @@ block_cipher = None
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[('.dll/libiconv.dll', '.')],
+    binaries=[],
     datas=[('img/TikBoosted.ico', 'img')],
     hiddenimports=[],
     hookspath=[],
