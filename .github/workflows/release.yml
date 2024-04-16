@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install pyinstaller
+        pip install -r requirements.txt
+
+    - name: Build Secondary EXE (TikBoosted)
+      run: pyinstaller main.spec
+
+    - name: Build Primary EXE (TikBoostedResourceExtractor)
+      run: pyinstaller bootstrap.spec
+
+    - name: Zip the Primary EXE
+      run: |
+        Compress-Archive -Path ./dist/TikBoostedResourceExtractor.exe -DestinationPath ./dist/TikBoostedResourceExtractor.zip
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset (TikBoostedResourceExtractor)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/TikBoostedResourceExtractor.zip
+        asset_name: TikBoostedResourceExtractor.zip
+        asset_content_type: application/zip
