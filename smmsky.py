@@ -18,6 +18,7 @@ class Smmsky(QRunnable):
         self.setAutoDelete(False)
         self.user = 'Smmsky'
         # 'Pending', 'In progress', 'Completed', 'Canceled', 'Partial'
+        self.queue.put((int(time.time()), ('get_order', {})))
 
         Globals._Log.info(self.user, 'Successfully initialized.')
 
@@ -69,6 +70,20 @@ class Smmsky(QRunnable):
             'condition': 'status NOT IN (?, ?, ?)',
             'params': ['Completed', 'Canceled', 'Partial']
         }, q)
+            # "orderId": "INTEGER PRIMARY KEY",
+            # "uniqueId": "TEXT",
+            # "videoId": "INTEGER",
+            # "link": "TEXT",
+            # "service": "INTEGER",
+            # "charge": "TEXT",
+            # "quantity": "INTEGER",
+            # "start_count": "INTEGER",
+            # "remains": "INTEGER",
+            # "status": "TEXT",
+            # "currency": "TEXT",
+            # "cancel": "BOOLEAN",
+            # "createTime": "INTEGER",
+            # "updateTime": "INTEGER"
         res = q.get()
         self.time_latest_status = time.time()
         if not res:
