@@ -34,16 +34,23 @@ class Worker(QRunnable):
 
 class WorkerSignals(QObject):
     database_operation_signal = pyqtSignal(str, dict, object)
+    googlesync_insert_task_signal = pyqtSignal(tuple)
     list_videos_right_signal = pyqtSignal(str)
     insert_account_to_tiktok_spider = pyqtSignal(str)
-    insert_smmsky_task_signal = pyqtSignal(object)
+    insert_orderIssuer_task_signal = pyqtSignal(object)
     set_progress_bar_title_signal = pyqtSignal(str)
     show_user_details_signal = pyqtSignal(str)
+    orderIssuer_binding_check_signal = pyqtSignal(list)
     telegram_bot_signal = pyqtSignal(str, dict)
     toggle_components_signal = pyqtSignal(bool)
     toggle_progress_bar_signal = pyqtSignal(bool)
-    update_account_earnings_signal = pyqtSignal(int, list)
+    update_account_changed_signal = pyqtSignal(dict)
+    update_account_earnings_signal = pyqtSignal(int, dict)
+    update_account_table_signal = pyqtSignal(dict)
     update_progress_signal = pyqtSignal(str, int)
+    update_orderIssuer_order_signal = pyqtSignal(list)
+    update_video_color_signal = pyqtSignal(dict)
+    update_right_video_color_signal = pyqtSignal(dict)
 
 class Globals(QObject):
     _ADMIN_USER = ''
@@ -51,22 +58,27 @@ class Globals(QObject):
     _BASE_URL_ASIA = ''
     _BASE_URL_AMERICA = ''
     _Bot = None
+    _CLIENT_ID = ''
+    _CLIENT_UUID = ''
     _log_textedit = QTextEdit()
     _log_label = QLabel()
     _Log = Logging(_log_textedit, _log_label)
+    _MUTEX_ACDICT = QMutex()
+    _MUTEX_BINDING = QMutex()
+    _ORDERISSUER_PARAMS = {}
     _PROXY_TW = ''
     _PROXY_US = ''
     _SERVER_SHEET = None
-    _SMMSKY_KEY = ''
-    _SMMSKY_URL = ''
     _SPREADSHEET_ID = ''
     _SQL = None
-    _SQL_MUTEX = QMutex()
+    _SYNC_ORDERS_SERVER = ''
+    _SYNC_ORDERS_UUID = ''
     _TELEGRAM_BOT_TOKEN = ''
     _TELEGRAM_CHATID = ''
     _TO_CAPTCHA_KEY = ''
     _WS = WorkerSignals()
     accounts_dict = {}
+    binging_dict = {}
     components = []
     is_app_running = True
     orders_dict = {}

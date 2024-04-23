@@ -52,10 +52,11 @@ class Logging(logging.Handler):
 
         self.delete_old_logs()
 
-    def emit(self, record_edit, record_label, file_record):
+    def emit(self, record_edit, file_record, record_label=None):
         try:
             QtCore.QMetaObject.invokeMethod(self.textedit, 'append', QtCore.Qt.ConnectionType.QueuedConnection, QtCore.Q_ARG(str, self.format(record_edit)))
-            QtCore.QMetaObject.invokeMethod(self.textlable, 'setText', QtCore.Qt.ConnectionType.QueuedConnection, QtCore.Q_ARG(str, self.format(record_label)))
+            if record_label:
+                QtCore.QMetaObject.invokeMethod(self.textlable, 'setText', QtCore.Qt.ConnectionType.QueuedConnection, QtCore.Q_ARG(str, self.format(record_label)))
             self.file_handler.emit(file_record)
         except Exception as e:
             print(str(e))
@@ -64,30 +65,30 @@ class Logging(logging.Handler):
         message = str(message)
         self.emit(
             logging.makeLogRecord({'user': user, 'level': 'DEBUG', 'msg': html.escape(message), 'color': '000000'}),
-            logging.makeLogRecord({'user': user, 'level': 'DEBUG', 'msg': html.escape(message if len(message)<30 else message[:30]), 'color': '000000'}),
-            logging.makeLogRecord({'user': user, 'level': 'DEBUG', 'msg': message, 'color': '000000'})
+            logging.makeLogRecord({'user': user, 'level': 'DEBUG', 'msg': message, 'color': '000000'}),
+            # logging.makeLogRecord({'user': user, 'level': 'DEBUG', 'msg': html.escape(message), 'color': '000000'})
         )
 
     def info(self, user, message):
         message = str(message)
         self.emit(
             logging.makeLogRecord({'user': user, 'level': 'INFO', 'msg': html.escape(message), 'color': '3CB371'}),
-            logging.makeLogRecord({'user': user, 'level': 'INFO', 'msg': html.escape(message if len(message)<30 else message[:30]), 'color': '3CB371'}),
-            logging.makeLogRecord({'user': user, 'level': 'INFO', 'msg': message, 'color': '000000'})
+            logging.makeLogRecord({'user': user, 'level': 'INFO', 'msg': message, 'color': '000000'}),
+            # logging.makeLogRecord({'user': user, 'level': 'INFO', 'msg': html.escape(message), 'color': '3CB371'})
         )
 
     def warning(self, user, message):
         message = str(message)
         self.emit(
             logging.makeLogRecord({'user': user, 'level': 'WARNING', 'msg': html.escape(message), 'color': 'FF8C00'}),
-            logging.makeLogRecord({'user': user, 'level': 'WARNING', 'msg': html.escape(message if len(message)<30 else message[:30]), 'color': 'FF8C00'}),
-            logging.makeLogRecord({'user': user, 'level': 'WARNING', 'msg': message, 'color': '000000'})
+            logging.makeLogRecord({'user': user, 'level': 'WARNING', 'msg': message, 'color': '000000'}),
+            logging.makeLogRecord({'user': user, 'level': 'WARNING', 'msg': html.escape(message), 'color': 'FF8C00'})
         )
 
     def error(self, user, message):
         message = str(message)
         self.emit(
             logging.makeLogRecord({'user': user, 'level': 'ERROR', 'msg': html.escape(message), 'color': 'FF0000'}),
-            logging.makeLogRecord({'user': user, 'level': 'ERROR', 'msg': html.escape(message if len(message)<30 else message[:30]), 'color': 'FF0000'}),
-            logging.makeLogRecord({'user': user, 'level': 'ERROR', 'msg': message, 'color': '000000'})
+            logging.makeLogRecord({'user': user, 'level': 'ERROR', 'msg': message, 'color': '000000'}),
+            logging.makeLogRecord({'user': user, 'level': 'ERROR', 'msg': html.escape(message), 'color': 'FF0000'})
         )

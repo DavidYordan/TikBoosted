@@ -1,17 +1,14 @@
 import asyncio
-import glob
-import os
 import psutil
-import pygetwindow
 import random
-import shutil
-from queue import PriorityQueue, Queue
 import time
+from queue import PriorityQueue, Queue
 from PyQt6.QtCore import (
+    QMutex,
     QRunnable
 )
-from TikTokApi import TikTokApi
 
+from dytiktokapi import DyTikTokApi
 from globals import Globals
 from operate_sqlite import DBSchema
 
@@ -19,24 +16,34 @@ class TikTokSpider(QRunnable):
     def __init__(self):
         super().__init__()
 
-        self.api = TikTokApi()
+        self.api = DyTikTokApi()
         self.accounts_columns = list(DBSchema.tables['accounts'].keys())
+        self.deleted_accounts = set()
+        self.lock_session = QMutex()
         self.video_columns = list(DBSchema.tables['videos'].keys())
         self.is_running = False
         self.queue = PriorityQueue()
+        self.proxies = [
+            {'server': 'http://127.0.0.1:30001'},
+            {'server': 'http://127.0.0.1:30002'},
+            {'server': 'http://127.0.0.1:30003'},
+            {'server': 'http://127.0.0.1:30004'},
+            {'server': 'http://127.0.0.1:30005'},
+            {'server': 'http://127.0.0.1:30006'},
+            {'server': 'http://127.0.0.1:30007'},
+            {'server': 'http://127.0.0.1:30008'},
+            {'server': 'http://127.0.0.1:30009'},
+            {'server': 'http://127.0.0.1:30010'},
+        ]
+        self.proxies_used = set()
+        self.session_indexies = Queue(5)
         self.setAutoDelete(False)
         self.user = 'TikTokSpider'
 
         Globals._Log.info(self.user, 'Successfully initialized.')
 
-    async def ensure_browser(self):
-        if hasattr(self.api, 'browser'):
-            if self.api.browser.is_connected():
-                return
-        await self.reboot_browser()
-
-    async def get_user_info(self, account, id, status):
-        user_info = await self.api.user(username=account).info()
+    async def get_user_info(self, session_index, account, id, status):
+        user_info = await self.api.user(username=account).info(session_index)
         now = int(time.time())
         updateTime = now + 43200 if status == '5.退學' else now
         user_data = user_info['userInfo']['user']
@@ -72,10 +79,10 @@ class TikTokSpider(QRunnable):
             'unique_columns': ['id']
         }, None)
 
-    async def get_user_videos(self, account, id, status):
+    async def get_user_videos(self, session_index, account, status):
         videos = []
         createTimeInit = int(time.time())
-        async for video in self.api.user(username=account).videos():
+        async for video in self.api.user(username=account).videos(session_index):
             video_info = video.as_dict
             title = ''
             if 'contents' in video_info:
@@ -83,7 +90,7 @@ class TikTokSpider(QRunnable):
             stats = video_info['stats']
             createTime = video_info['createTime']
             values = {
-                'videoId': int(video_info['id']),
+                'videoId': video_info['id'],
                 'account': account,
                 'title': title,
                 'collectCount': stats['collectCount'],
@@ -105,8 +112,6 @@ class TikTokSpider(QRunnable):
             'data': videos,
             'unique_columns': ['videoId']
         }, None)
-
-        Globals._MUTEX_ACDICT.lock()
         accounts_createTime = Globals.accounts_dict.get(account, {}).get('createTime', 0)
         if createTimeInit < accounts_createTime:
             Globals._WS.database_operation_signal.emit('update',{
@@ -114,78 +119,20 @@ class TikTokSpider(QRunnable):
                 'updates': {'createTime': createTimeInit},
                 'condition': f'account="{account}"'
             }, None)
-            Globals.accounts_dict[account]['createTime'] = createTimeInit
-        Globals._MUTEX_ACDICT.unlock()
-
         if status == '5.退學':
             return
-        
+        Globals._WS.update_orderIssuer_order_signal.emit(videos)
         Globals._MUTEX_BINDING.lock()
         if account in Globals.binging_dict:
-            Globals._WS.orderIssuer_binding_check_signal.emit(videos)
-        else:
-            Globals._WS.update_orderIssuer_order_signal.emit(videos)
+            Globals._WS.orderIssuer_binding_check_signal.emit(account)
         Globals._MUTEX_BINDING.unlock()
 
-    async def spider(self):
-        while self.is_running and Globals.is_app_running and not self.queue.empty():
-            weight, account = self.queue.get()
-            if time.time() - weight < 60:
-                self.queue.put((weight, account))
-                continue
-            Globals._Log.debug(self.user, f"total: {self.queue.qsize()+1}, weight: {weight}, account: {account}")
-            await self.ensure_browser()
-            try:
-                Globals._MUTEX_ACDICT.lock()
-                id = Globals.accounts_dict[account]['id']
-                status = Globals.accounts_dict[account]['status']
-                Globals._MUTEX_ACDICT.unlock()
-                await self.get_user_info(account, id, status)
-                await self.get_user_videos(account, id, status)
-                self.queue.put((self.get_weight(account), account))
-
-            except KeyError as k:
-                if 'user' in str(k):
-                    Globals._Log.warning(self.user, f'The homepage of {account} cannot be found: {k}')
-                    # updateTime = int(time.time()) + 43200
-                    updateTime = int(time.time())
-                    Globals._WS.update_account_table_signal.emit({account: {'updateTime': updateTime}})
-                    Globals._WS.database_operation_signal.emit('upsert', {
-                        'table_name': 'accounts',
-                        'columns': ['id', 'updateTime'],
-                        'values': [Globals.accounts_dict[account]['id'], updateTime],
-                        'unique_columns': ['id']
-                    }, None)
-                    self.queue.put((updateTime, account))
-                else:
-                    Globals._Log.error(self.user, f'type: {type(k)}, details: {k}')
-                    await self.reboot_browser()
-                    self.queue.put((self.get_weight(account), account))
-
-            except Exception as e:
-                Globals._Log.error(self.user, f'type: {type(e)}, details: {e}')
-                await self.reboot_browser()
-                self.queue.put((self.get_weight(account), account))
-
-            time.sleep(random.uniform(1,2))
-
-    async def reboot_browser(self):
-        try:
-            Globals._Log.info(self.user, 'Attempting to reboot the browser.')
-
-            if hasattr(self.api, 'browser') and self.api.browser.is_connected():
-                await self.api.close_sessions()
-
-            self.terminate_playwright_processes()
-            del self.api
-            time.sleep(1)
-            self.api = TikTokApi()
-            
-            await self.api.create_sessions(num_sessions=1, sleep_after=5, headless=False, override_browser_args=['--window-position=9999,9999'])
-            self.minimize_chromium()
-            Globals._Log.info(self.user, 'Browser rebooted successfully.')
-        except Exception as e:
-            Globals._Log.error(self.user, f'Failed to reboot the browser: {e}')
+    def choice_proxy(self):
+        indexies = set([i for i in range(len(self.proxies))])
+        proxy_index = random.choice(list(indexies - self.proxies_used))
+        self.proxies_used.add(proxy_index)
+        Globals._Log.debug(self.user, f'Successfully selected a proxy.')
+        return self.proxies[proxy_index]
 
     def get_accounts(self):
         Globals._MUTEX_ACDICT.lock()
@@ -204,7 +151,7 @@ class TikTokSpider(QRunnable):
             return updateTime
 
         except Exception as e:
-            Globals._Log.error(self.user, f'get_accounts: {e}')
+            Globals._Log.error(self.user, f'get_weight: {e}')
 
         finally:
             Globals._MUTEX_ACDICT.unlock()
@@ -216,29 +163,90 @@ class TikTokSpider(QRunnable):
         else:
             Globals._Log.warning(self.user, f'The spider is not running and cannot insert {account}')
 
-    def minimize_chromium(self):
+    async def run_session(self, account, session_index):
         try:
-            windows = pygetwindow.getAllWindows()
-            for window in windows:
-                if 'Chromium' not in window.title:
-                    continue
-                window.minimize()
-                return
-        except Exception as e:
-            Globals._Log.warning(self.user, f'{e}')
+            Globals._MUTEX_ACDICT.lock()
+            id = Globals.accounts_dict[account]['id']
+            status = Globals.accounts_dict[account]['status']
+            Globals._MUTEX_ACDICT.unlock()
+            await self.get_user_info(session_index, account, id, status)
+            await self.get_user_videos(session_index, account, status)
+            self.queue.put((self.get_weight(account), account))
 
-    def run(self):
+        except KeyError as k:
+            if 'user' in str(k):
+                Globals._Log.warning(self.user, f'The homepage of {account} cannot be found: {k}')
+                # updateTime = int(time.time()) + 43200
+                updateTime = int(time.time())
+                Globals._WS.update_account_table_signal.emit({account: {'updateTime': updateTime}})
+                Globals._WS.database_operation_signal.emit('upsert', {
+                    'table_name': 'accounts',
+                    'columns': ['id', 'updateTime'],
+                    'values': [Globals.accounts_dict[account]['id'], updateTime],
+                    'unique_columns': ['id']
+                }, None)
+                self.queue.put((updateTime, account))
+            else:
+                Globals._Log.error(self.user, f'type: {type(k)}, details: {k}')
+                self.queue.put((self.get_weight(account), account))
+
+        except Exception as e:
+            Globals._Log.error(self.user, f'type: {type(e)}, details: {e}')
+            self.queue.put((self.get_weight(account), account))
+
+        finally:
+            self.lock_session.lock()
+            self.session_indexies.put(session_index)
+            self.lock_session.unlock()
+
+    async def main(self):
         self.is_running = True
+        try:
+            await self.api.create_chromium(headless=False, override_browser_args=['--window-position=9999,9999'])
+        except Exception as e:
+            print(str(e))
         try:
             while self.is_running and Globals.is_app_running:
                 if self.queue.empty():
                     self.get_accounts()
-                asyncio.run(self.spider())
-                time.sleep(1)
-        except Exception as e:
-            Globals._Log.error(self.user, f'{e}')
+
+                weight, account = self.queue.get()
+                if account in self.deleted_accounts:
+                    self.deleted_accounts.discard(account)
+                    Globals._Log.info(self.user, f'Deleted {account}')
+                    continue
+                if time.time() - weight < 60:
+                    self.queue.put((weight, account))
+                    continue
+
+                Globals._Log.debug(self.user, f"total: {self.queue.qsize()+1}, weight: {weight}, account: {account}")
+
+                self.lock_session.lock()
+                try:
+                    if self.session_indexies.qsize():
+                        session_index = self.session_indexies.get()
+                    else:
+                        if len(self.api.sessions) < 5:
+                            await self.api.create_session(self.choice_proxy())
+                            session_index = len(self.api.sessions) - 1
+                        else:
+                            Globals._Log.debug(self.user, f'{self.api.sessions}')
+
+                except Exception as e:
+                    Globals._Log.error(self.user, f'main: {e}')
+
+                finally:
+                    self.lock_session.unlock()
+
+                asyncio.run(asyncio.run, self.run_session(account, session_index))
+
+                asyncio.sleep(1)
         finally:
             self.is_running = False
+            self.api.close_sessions()
+
+    def run(self):
+        asyncio.run(self.main())
 
     def start_task(self):
         if not self.is_running:
@@ -250,20 +258,8 @@ class TikTokSpider(QRunnable):
     def terminate_playwright_processes(self):
         for process in psutil.process_iter(['pid', 'name', 'exe']):
             try:
-                path = process.info['exe']
-                if 'playwright' in path:
-                    process.terminate()
-                    process.wait()
-                elif 'chrome' in path and 'chrome-win' in path:
+                if 'playwright' in process.info['exe']:
                     process.terminate()
                     process.wait()
             except:
                 continue
-
-        temp_folders = glob.glob(os.path.join(os.getenv('TEMP'), 'playwright*'))
-        for folder in temp_folders:
-            try:
-                shutil.rmtree(folder)
-                print(f'Deleted folder: {folder}')
-            except Exception as e:
-                print(f'Error deleting folder {folder}: {e}')

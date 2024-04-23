@@ -30,95 +30,7 @@ class CreateAccounts(QObject):
         self.url_update_zh = 'https://asia.reelshors.com/sqx_fast/app/user/updateUsers'
         self.url_update_en = 'https://www.reelshors.com/sqx_fast/app/user/updateUsers'
         self.url_invitation = """
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U48KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UWMKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UVTKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U64KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U6KKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U6SKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UHRKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U3GKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=J4VKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UJMKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J76KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UY9KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UXMKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JPBKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UZVKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J7SKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UQYKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JK6KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J4BKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UK4KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=DGZKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UH7KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JCNKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JNHKSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=DFJKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=JRNKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U7XKSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=U2XKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JKCKSL
-asia.reelshors.com/pages/login/login?inviterType=0&invitation=KNKSLF
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JP6KSL
-asia.reelshors.com/pages/login/login?inviterType=0&invitation=3GKSLF
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UQFKSL
-https://www.reelshors.com/pages/login/login?invitation=67&inviterType=1&inviterUrl=%2Fme%2Fdetail%2Fdetail%3Fid%3D67%26courseDetailsId%3D6287
-www.reelshors.com/pages/login/register?invitation=UVKSLF
-https://www.reelshors.com/pages/login/login?invitation=80&inviterType=1&inviterUrl=%2Fme%2Fdetail%2Fdetail%3Fid%3D183%26courseDetailsId%3D16748
-www.reelshors.com/pages/login/login?inviterType=0&invitation=UYKSLF
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J6BKSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=DY4KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=3HKSLF
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JM6KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JJDKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J54KSL
-asia.reelshors.com/pages/login/login?inviterType=0&invitation=WTKSLF
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JKMKSL
 asia.reelshors.com/pages/login/login?inviterType=0&invitation=VZKSLF
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=UVFKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JCVKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=JCBKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JECKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=D8KSLF
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=J4XKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JKFKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=42KSLF
-www.reelshors.com/pages/login/login?inviterType=0&invitation=UKKSLF
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=JTXKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=JMRKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=JW4KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J7CKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JX7KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JEBKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J7BKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J78KSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=V9KSLF
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=DF7KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JPNKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=JRVKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U84KSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=J4GKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U63KSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=UG2KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JKKKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=JDBKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J9GKSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=DV9KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JEKKSL
-asia.reelshors.com/pages/login/login?inviterType=0&invitation=DFEKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J7EKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=JE4KSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=U94KSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=JQFKSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=JQMKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=J6NKSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=JFCKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UQRKSL
-https://asia.reelshors.com/pages/login/login?inviterType=0&invitation=DQEKSL
-www.reelshors.com/pages/login/login?inviterType=0&invitation=JNKKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=D6MKSL
-https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UJXKSL
 """
 
     def create_account(self):
@@ -167,7 +79,7 @@ https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UJXKSL
                     continue
                 if '@' not in user['userName']:
                     print(f'{url[-6:]}: {number}')
-                    time.sleep(random.randint(150, 250))
+                    time.sleep(random.randint(3600, 21600))
                     continue
                 newname = self.mask_email(user['userName'])
                 body = {
@@ -198,7 +110,7 @@ https://www.reelshors.com/pages/login/login?inviterType=0&invitation=UJXKSL
                         attempts += 1
                         continue
                 print(f'{invitation_code}: {number}')
-                time.sleep(random.randint(150, 250))
+                time.sleep(random.randint(3600, 21600))
 
     def get_email(self):
 

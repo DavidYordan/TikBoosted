@@ -291,25 +291,21 @@ class AccountDialog(QDialog):
             'get',
             f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
         )
-        print(res)
         money_diff = float(productPrice) - res.get('data', {}).get('money', 0)
         if money_diff > 0:
             res = await self.request_with_admin(
                 'post',
                 f'{self.url_base}/sqx_fast/user/addCannotMoney/{userId}/{productPrice}'
             )
-            print(f'add money: {productPrice}')
             res = await self.request_with_admin(
                 'get',
                 f'{self.url_base}/sqx_fast/user/{userId}'
             )
             phone = res['data']['userEntity']['phone']
-            print(phone)
             res = await self.request_with_admin(
                 'get',
                 f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
             )
-            print(res)
         
         if not phone:
             res = await self.request_with_admin(
@@ -317,14 +313,13 @@ class AccountDialog(QDialog):
                 f'{self.url_base}/sqx_fast/user/{userId}'
             )
             phone = res['data']['userEntity']['phone']
-            print(phone)
 
         session = requests.Session()
         res = session.post(f'{self.url_base}/sqx_fast/app/Login/registerCode?password=d135246&phone={phone}')
         try:
             token = res.json()['token']
         except Exception as e:
-            print(res.text)
+            Globals._Log.error(self.user, f'{e}')
             return
         session.headers.update({'Token': token})
         if productName == 'vip':
@@ -332,14 +327,14 @@ class AccountDialog(QDialog):
             try:
                 orderId = res.json()['data']['ordersId']
             except Exception as e:
-                print(res.text)
+                Globals._Log.error(self.user, f'{e}')
                 return
         else:
             res = session.get(f'{self.url_base}/sqx_fast/app/order/insertCourseOrders?courseId={productId}&time={int(time.time()*1000)}')
             try:
                 orderId = res.json()['data']['orders']['ordersId']
             except Exception as e:
-                print(res.text)
+                Globals._Log.error(self.user, f'{e}')
                 return
         time.sleep(1)
         res = session.post(
@@ -347,14 +342,13 @@ class AccountDialog(QDialog):
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
             data=f'orderId={orderId}'
         )
-        print(res.text)
         await self.update_money_worker()
 
     def setup_ui(self):
         main_layout = QHBoxLayout(self)
 
         user_details_layout = QVBoxLayout()
-        user_details_label = QLabel('用户详情')
+        user_details_label = QLabel('User Details')
         user_details_layout.addWidget(user_details_label)
         self.user_details_text_edit = QTextEdit()
         self.user_details_text_edit.setReadOnly(True)
@@ -365,8 +359,8 @@ class AccountDialog(QDialog):
         main_layout.addLayout(user_details_layout)
 
         income_details_layout = QVBoxLayout()
-        income_details_label = QLabel('收益明细')
-        income_details_layout.addWidget(income_details_label)
+        self.income_details_label = QLabel('Earning Details')
+        income_details_layout.addWidget(self.income_details_label)
         self.income_details_scroll_widget = QWidget()
         self.income_details_layout = QVBoxLayout(self.income_details_scroll_widget)
         income_details_scroll = QScrollArea()
@@ -376,8 +370,8 @@ class AccountDialog(QDialog):
         main_layout.addLayout(income_details_layout)
 
         team_members_layout = QVBoxLayout()
-        team_members_label = QLabel('团队成员')
-        team_members_layout.addWidget(team_members_label)
+        self.team_members_label = QLabel('Team')
+        team_members_layout.addWidget(self.team_members_label)
         self.team_members_scroll_widget = QWidget()
         self.team_members_layout = QVBoxLayout(self.team_members_scroll_widget)
         team_members_scroll = QScrollArea()
@@ -404,7 +398,7 @@ class AccountDialog(QDialog):
 
     def trigger_product_selected(self, product, button_text):
         userId, _, _ = button_text.split('|')
-        res = Globals._SQL.read(self.users_table, 'phone', f'userId="{userId}"')
+        res = Globals._SQL.read(self.users_table, ['phone'], f'userId="{userId}"')
         try:
             phone = res[0][0]
         except:
@@ -432,7 +426,13 @@ class AccountDialog(QDialog):
                 money_sum_by_date[date] += item['money']
                 money_total += item['money']
 
-        Globals._WS.update_account_earnings_signal.emit(int(self.row), [money_sum_by_date[today_date], len(money_sum_by_date), money_total, latest_create_time])
+        Globals._WS.update_account_earnings_signal.emit(int(self.row), {
+            'todayEarnings': money_sum_by_date.get(today_date, 0),
+            'earningDays': len(money_sum_by_date),
+            'totalEarnings': money_total,
+            'latestEarningDay': latest_create_time
+        })
+        self.income_details_label.setText(f'Earning Details: {money_total}/{len(money_sum_by_date)}')
 
         sorted_money_sum = sorted(money_sum_by_date.items(), key=lambda x: x[0], reverse=True)
         while self.income_details_layout.count():
@@ -440,28 +440,33 @@ class AccountDialog(QDialog):
             if child.widget():
                 child.widget().deleteLater()
 
-        for date, total_sum in sorted_money_sum:
+        for date, total_sum in sorted_money_sum[:50]:
             button_text = f"{date}: {total_sum:.2f}"
             button = QPushButton(button_text)
             tooltip_text = '\n'.join(details_by_date[date])
             button.setToolTip(tooltip_text)
             self.income_details_layout.addWidget(button)
 
+        self.income_details_layout.addStretch()
+
     @pyqtSlot(list, list)
     def update_team(self, datas, vips):
         sorted_datas = sorted(datas, key=lambda x: x['createTime'], reverse=True)
+        self.team_members_label.setText(f'Team ({len(sorted_datas)})')
 
         while self.team_members_layout.count():
             child = self.team_members_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        for item in sorted_datas:
+        for item in sorted_datas[:50]:
             button_text = f"{item['userId']}|{item['money']}|{item['createTime']}"
             button = QPushButton(button_text)
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             button.customContextMenuRequested.connect(lambda pos, b=button, v=vips: self.show_menu(pos, b, v))
             self.team_members_layout.addWidget(button)
+        
+        self.team_members_layout.addStretch()
 
     @pyqtSlot(dict)
     def update_user_details(self, user_data):

@@ -17,10 +17,10 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QStyleFactory,
     QTableWidget,
-    QTableWidgetSelectionRange,
     QTabWidget,
     QVBoxLayout,
     QWidget
@@ -30,19 +30,20 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
 
 from accounts_tab import AccountsTab
-from accounts_details_tab import AccountsDetailsTab
 from agents_america_tab import AgentsAmericaTab
 from agents_asia_tab import AgentsAsiaTab
 from config_dialog import ConfigDialog
 from globals import Globals
+from google_sync import GoogleSync
 from products_america_tab import ProductsAmericaTab
 from products_asia_tab import ProductsAsiaTab
 from progress_dialog import ProgressDialog
-from smmsky import Smmsky
+from orderIssuer import OrderIssuer
 from telegram_bot import TelegramBot
 from tiktok_spider import TikTokSpider
 from users_america_tab import UsersAmericaTab
 from users_asia_tab import UsersAsiaTab
+from videos_tab import VideosTab
 from videos_tab_right import VideosTabRight
 
 class SearchDialog(QDialog):
@@ -133,7 +134,8 @@ class TikBoosted(QMainWindow):
         else:
             icon_path = ('img/TikBoosted.ico')
         self.setWindowIcon(QIcon(icon_path))
-        self.resize(1440, 960)
+        self.resize(1080, 640)
+        self.showMaximized()
 
         import config
         config.config_init()
@@ -145,14 +147,19 @@ class TikBoosted(QMainWindow):
 
         self.progress_bar = ProgressDialog(self)
 
+        self.googleSync = GoogleSync()
+        Globals._WS.googlesync_insert_task_signal.connect(self.googleSync_insert_task)
+
         self.telegramBot = TelegramBot()
         Globals._WS.telegram_bot_signal.connect(self.telegram_bot_task)
 
         self.tiktokSpider = TikTokSpider()
         Globals._WS.insert_account_to_tiktok_spider.connect(self.insert_account_to_tiktok_spider)
 
-        self.smmsky = Smmsky()
-        Globals._WS.insert_smmsky_task_signal.connect(self.insert_smmsky_task)
+        self.orderIssuer = OrderIssuer()
+        Globals._WS.insert_orderIssuer_task_signal.connect(self.insert_orderIssuer_task)
+        Globals._WS.orderIssuer_binding_check_signal.connect(self.orderIssuer_binding_check)
+        Globals._WS.update_orderIssuer_order_signal.connect(self.videos_to_orderIssuer)
 
         self.user = 'TikBoosted'
 
@@ -176,26 +183,36 @@ class TikBoosted(QMainWindow):
         Globals.components.append(menu_menu)
         action_create_users = QAction('Create Users', self)
         action_create_users.triggered.connect(self.create_users)
+        action_create_users = QAction('Get Withdraw', self)
+        action_create_users.triggered.connect(self.get_withdraw)
         menu_menu.addActions([action_create_users])
 
-        menu_update = menubar.addMenu('Update')
-        Globals.components.append(menu_update)
-        action_update_users = QAction('Update Users', self)
-        action_update_users.triggered.connect(self.update_users)
-        action_update_products = QAction('Update Products', self)
-        action_update_products.triggered.connect(self.update_products)
-        menu_update.addActions([action_update_users, action_update_products])
+        menu_config = menubar.addMenu('Config')
+        action_config = QAction('Config', self)
+        action_config.triggered.connect(self.open_config_dialog)
+        menu_config.addActions([action_config])
 
-        menu_smmsky = menubar.addMenu('Smmsky')
-        Globals.components.append(menu_smmsky)
-        self.action_smmsky_run = QAction('Run', self)
-        self.action_smmsky_run.triggered.connect(self.smmsky_run)
-        self.action_smmsky_stop = QAction('Stop', self)
-        self.action_smmsky_stop.triggered.connect(self.smmsky_stop)
-        self.action_smmsky_stop.setEnabled(False)
-        self.action_smmsky_update_services = QAction('Update Services', self)
-        self.action_smmsky_update_services.triggered.connect(self.smmsky_update_services)
-        menu_smmsky.addActions([self.action_smmsky_run, self.action_smmsky_stop, self.action_smmsky_update_services])
+        menu_googleSync = menubar.addMenu('Google')
+        Globals.components.append(menu_googleSync)
+        self.action_googleSync_run = QAction('Run', self)
+        self.action_googleSync_run.triggered.connect(self.googleSync_run)
+        self.action_googleSync_stop = QAction('Stop', self)
+        self.action_googleSync_stop.triggered.connect(self.googleSync_stop)
+        self.action_googleSync_stop.setEnabled(False)
+        self.action_googleSync_jump_load = QAction('Jump Load', self)
+        self.action_googleSync_jump_load.triggered.connect(self.googleSync_jump_load)
+        menu_googleSync.addActions([self.action_googleSync_run, self.action_googleSync_stop, self.action_googleSync_jump_load])
+
+        menu_orderIssuer = menubar.addMenu('OrderIssuer')
+        Globals.components.append(menu_orderIssuer)
+        self.action_orderIssuer_run = QAction('Run', self)
+        self.action_orderIssuer_run.triggered.connect(self.orderIssuer_run)
+        self.action_orderIssuer_stop = QAction('Stop', self)
+        self.action_orderIssuer_stop.triggered.connect(self.orderIssuer_stop)
+        self.action_orderIssuer_stop.setEnabled(False)
+        self.action_orderIssuer_update_services = QAction('Update Services', self)
+        self.action_orderIssuer_update_services.triggered.connect(self.orderIssuer_update_services)
+        menu_orderIssuer.addActions([self.action_orderIssuer_run, self.action_orderIssuer_stop, self.action_orderIssuer_update_services])
 
         menu_spider = menubar.addMenu('Spider')
         Globals.components.append(menu_spider)
@@ -206,10 +223,13 @@ class TikBoosted(QMainWindow):
         self.action_spider_stop.triggered.connect(self.spider_stop)
         menu_spider.addActions([self.action_spider_run, self.action_spider_stop])
 
-        menu_config = menubar.addMenu('config')
-        action_config = QAction('Config', self)
-        action_config.triggered.connect(self.open_config_dialog)
-        menu_config.addActions([action_config])
+        menu_update = menubar.addMenu('Update')
+        Globals.components.append(menu_update)
+        action_update_users = QAction('Update Users', self)
+        action_update_users.triggered.connect(self.update_users)
+        action_update_products = QAction('Update Products', self)
+        action_update_products.triggered.connect(self.update_products)
+        menu_update.addActions([action_update_users, action_update_products])
 
         menu_test = menubar.addMenu('Test')
         self.action_telegram_bot_run = QAction('Run Bot', self)
@@ -256,10 +276,14 @@ class TikBoosted(QMainWindow):
         )
         self.tab_left.addTab(self.accounts_tab, 'Ac')
 
-        self.accounts_details_tab = AccountsDetailsTab(
+        self.videos_tab = VideosTab(
             self.tab_left
         )
-        self.tab_left.addTab(self.accounts_details_tab, 'Acs')
+        self.tab_left.addTab(self.videos_tab, 'Videos')
+
+        self.users_america_tab = UsersAmericaTab(
+            self.tab_left
+        )
 
         log_widget = QWidget()
         self.tab_left.addTab(log_widget, 'Log')
@@ -268,9 +292,6 @@ class TikBoosted(QMainWindow):
         Globals._log_textedit.document().setMaximumBlockCount(200)
         log_vlayout.addWidget(Globals._log_textedit, 11)
 
-        self.users_america_tab = UsersAmericaTab(
-            self.tab_left
-        )
         self.tab_left.addTab(self.users_america_tab, 'UserAmer')
 
         self.users_asia_tab = UsersAsiaTab(
@@ -307,35 +328,64 @@ class TikBoosted(QMainWindow):
         splitter.setSizes([300, 300])
 
         layout_main.addWidget(Globals._log_label, 1)
+        Globals._log_label.setWordWrap(True)
+        Globals._log_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        Globals._log_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Globals._log_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
     def create_users(self):
         pass
+
+    def get_withdraw(self):
+        pass
+
+    @pyqtSlot(tuple)
+    def googleSync_insert_task(self, t):
+        self.googleSync.insert_task(t)
+
+    def googleSync_run(self):
+        if not self.googleSync.is_running:
+            self.googleSync.start_task()
+        self.action_googleSync_run.setEnabled(False)
+        self.action_googleSync_stop.setEnabled(True)
+
+    def googleSync_stop(self):
+        self.googleSync.stop_task()
+        self.action_googleSync_run.setEnabled(True)
+        self.action_googleSync_stop.setEnabled(False)
+
+    def googleSync_jump_load(self):
+        self.googleSync.queue.put((1, ('sync_google_accounts', {})))
 
     @pyqtSlot(str)
     def insert_account_to_tiktok_spider(self, account):
         self.tiktokSpider.insert_account(account)
 
     @pyqtSlot(object)
-    def insert_smmsky_task(self, ob):
-        self.smmsky.queue.put(ob)
+    def insert_orderIssuer_task(self, ob):
+        self.orderIssuer.queue.put(ob)
 
     def open_config_dialog(self):
         dialog = ConfigDialog()
         dialog.exec()
 
-    def smmsky_run(self):
-        if not self.smmsky.is_running:
-            self.smmsky.start_task()
-        self.action_smmsky_run.setEnabled(False)
-        self.action_smmsky_stop.setEnabled(True)
+    @pyqtSlot(list)
+    def orderIssuer_binding_check(self, videos):
+        self.orderIssuer.safe_put((6, ('binding_check', {'videos': videos})))
 
-    def smmsky_stop(self):
-        self.smmsky.stop_task()
-        self.action_smmsky_run.setEnabled(True)
-        self.action_smmsky_stop.setEnabled(False)
+    def orderIssuer_run(self):
+        if not self.orderIssuer.is_running:
+            self.orderIssuer.start_task()
+        self.action_orderIssuer_run.setEnabled(False)
+        self.action_orderIssuer_stop.setEnabled(True)
 
-    def smmsky_update_services(self):
-        self.smmsky.queue.put((1, ('update_services', {'action': 'services'})))
+    def orderIssuer_stop(self):
+        self.orderIssuer.stop_task()
+        self.action_orderIssuer_run.setEnabled(True)
+        self.action_orderIssuer_stop.setEnabled(False)
+
+    def orderIssuer_update_services(self):
+        self.orderIssuer.queue.put((1, ('update_services', {'action': 'services'})))
 
     def spider_run(self):
         if not self.tiktokSpider.is_running:
@@ -378,7 +428,16 @@ class TikBoosted(QMainWindow):
     def update_users(self):
         pass
 
+    @pyqtSlot(list)
+    def videos_to_orderIssuer(self, videos):
+        self.orderIssuer.safe_put((5, ('calculate_orders', {'videos': videos})))
+
 if __name__ == '__main__':
+    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = './temp'
+    os.environ['XDG_CACHE_HOME'] = './temp'
+    os.environ['LOCALAPPDATA'] = './temp'
+    os.environ['TEMP'] = './temp'
+    os.environ['TMP'] = './temp'
     # app = QApplication(sys.argv)
     app.setStyle(QStyleFactory.create('Fusion'))
     app.setStyleSheet("""

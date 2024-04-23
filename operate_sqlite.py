@@ -106,42 +106,6 @@ class OperateSqlite(QObject):
                             Globals._Log.error(self.user, f'Error occurred while adding column {column_name} to {table_name}: {error}')
                             self.connection.rollback()
 
-    def clear_table(self, table_name):
-        self._connect()
-        if not self.connection or not self.cursor:
-            return None
-        try:
-            self.cursor.execute(f"DELETE FROM {table_name};")
-            self.connection.commit()
-            Globals._Log.info(self.user, f'All data deleted from table {table_name}.')
-            return self.cursor.rowcount
-        except sqlite3.Error as error:
-            self.connection.rollback()
-            Globals._Log.error(self.user, f'Error occurred while deleting data from table {table_name}: {error}')
-            return None
-        
-    def clear_bulk_insert(self, table_name, columns, data):
-        self.clear_table(table_name)
-        self.bulk_insert(table_name, columns, data)
-
-    def execute_query(self, query, params=None, many=False):
-        self._connect()
-        if not self.connection or not self.cursor:
-            return None
-        try:
-            if many:
-                self.cursor.executemany(query, params)
-            else:
-                self.cursor.execute(query, params or [])
-            if query.strip().upper().startswith('SELECT'):
-                return self.cursor.fetchall()
-            self.connection.commit()
-            return self.cursor.rowcount
-        except sqlite3.Error as error:
-            self.connection.rollback()
-            Globals._Log.error(self.user, f'Error occurred during query execution: {error}')
-            return None
-
     def bulk_insert(self, table_name, columns, data):
         columns_str = ", ".join(columns)
         placeholders = ", ".join("?" for _ in columns)
@@ -163,6 +127,24 @@ class OperateSqlite(QObject):
 
         values = [tuple(item[col] for col in columns) for item in data]
         return self.execute_query(query, values, many=True)
+        
+    def clear_bulk_insert(self, table_name, columns, data):
+        self.clear_table(table_name)
+        self.bulk_insert(table_name, columns, data)
+
+    def clear_table(self, table_name):
+        self._connect()
+        if not self.connection or not self.cursor:
+            return None
+        try:
+            self.cursor.execute(f"DELETE FROM {table_name};")
+            self.connection.commit()
+            Globals._Log.info(self.user, f'All data deleted from table {table_name}.')
+            return self.cursor.rowcount
+        except sqlite3.Error as error:
+            self.connection.rollback()
+            Globals._Log.error(self.user, f'Error occurred while deleting data from table {table_name}: {error}')
+            return None
 
     def create(self, table_name, columns, values):
         columns_str = ", ".join(columns)
@@ -188,6 +170,24 @@ class OperateSqlite(QObject):
             Globals._Log.error(self.user, f'Error occurred during fetching table fields: {error}')
             return []
 
+    def execute_query(self, query, params=None, many=False):
+        self._connect()
+        if not self.connection or not self.cursor:
+            return None
+        try:
+            if many:
+                self.cursor.executemany(query, params)
+            else:
+                self.cursor.execute(query, params or [])
+            if query.strip().upper().startswith('SELECT'):
+                return self.cursor.fetchall()
+            self.connection.commit()
+            return self.cursor.rowcount
+        except sqlite3.Error as error:
+            self.connection.rollback()
+            Globals._Log.error(self.user, f'Error occurred during query execution: {error}')
+            return None
+
     def insert(self, table_name, columns, data):
         columns_str = ", ".join(columns)
         placeholders = ", ".join("?" for _ in columns)
@@ -196,7 +196,8 @@ class OperateSqlite(QObject):
         return self.execute_query(query, values)
 
     def read(self, table_name, columns="*", condition=None, params=None):
-        query = f"SELECT {columns} FROM {table_name}"
+        columns_str = ", ".join(columns) if columns else '*'
+        query = f"SELECT {columns_str} FROM {table_name}"
         if condition:
             query += f" WHERE {condition}"
         return self.execute_query(query, params)
@@ -225,7 +226,8 @@ class OperateSqlite(QObject):
 class DBSchema(object):
     tables = {
         "accounts": {
-            "account": "TEXT PRIMARY KEY",
+            "id": "INTEGER PRIMARY KEY",
+            "account": "TEXT",
             "position": "TEXT",
             "status": "TEXT",
             "team": "TEXT",
@@ -236,13 +238,12 @@ class DBSchema(object):
             "region": "TEXT",
             "referralCode": "TEXT",
             "clientRemark": "TEXT",
+            "serverRemark": "TEXT",
             "todayEarnings": "TEXT",
             "earningDays": "INTEGER",
             "totalEarnings": "TEXT",
-            "latestEarningDay": "TEXT"
-        },
-        "accounts_detail": {
-            "userId": "INTEGER PRIMARY KEY",
+            "latestEarningDay": "TEXT",
+            "userId": "INTEGER",
             "uniqueId": "TEXT",
             "nickname": "TEXT",
             "logid": "TEXT",
@@ -259,7 +260,8 @@ class DBSchema(object):
             "secUid": "TEXT",
             "ttSeller": "BOOLEAN",
             "verified": "BOOLEAN",
-            "updateTime": "INTEGER"
+            "updateTime": "INTEGER",
+            "createTime": "INTEGER"
         },
         "agents_america": {
             "userId": "INTEGER PRIMARY KEY",
@@ -316,20 +318,6 @@ class DBSchema(object):
             "agentRate": "TEXT",
             "agentType": "INTEGER",
             "agentWithdrawCash": "TEXT"
-        },
-        "create_team_plan": {
-            "orderId": "INTEGER PRIMARY KEY",
-            "link": "TEXT",
-            "charge": "TEXT",
-            "status": "TEXT",
-            "quantity": "INTEGER",
-            "remains": "INTEGER",
-            "action": "TEXT",
-            "service": "INTEGER",
-            "start_count": "INTEGER",
-            "currency": "TEXT",
-            "createtime": "INTEGER",
-            "updatetime": "INTEGER"
         },
         "define_config": {
             "name": "TEXT PRIMARY KEY",
@@ -406,8 +394,10 @@ class DBSchema(object):
             "courseDetailsName": "TEXT",
             "status": "INTEGER"
         },
-        "smmsky_orders": {
-            "orderId": "INTEGER PRIMARY KEY",
+        "orderIssuer_orders": {
+            "client": "TEXT",
+            "platform": "TEXT NOT NULL",
+            "orderId": "INTEGER NOT NULL",
             "uniqueId": "TEXT",
             "videoId": "INTEGER",
             "link": "TEXT",
@@ -417,13 +407,16 @@ class DBSchema(object):
             "start_count": "INTEGER",
             "remains": "INTEGER",
             "status": "TEXT",
+            "duration": "INTEGER",
+            "rate": "TEXT",
             "currency": "TEXT",
             "cancel": "BOOLEAN",
             "createTime": "INTEGER",
             "updateTime": "INTEGER"
         },
-        "smmsky_services": {
-            "service": "INTEGER PRIMARY KEY",
+        "orderIssuer_services": {
+            "platform": "TEXT",
+            "service": "INTEGER",
             "name": "TEXT",
             "type": "TEXT",
             "rate": "TEXT",
@@ -433,60 +426,6 @@ class DBSchema(object):
             "refill": "BOOLEAN",
             "cancel": "BOOLEAN",
             "category": "TEXT"
-        },
-        "tk_tasks": {
-            "name": "TEXT PRIMARY KEY",
-            "token": "TEXT",
-            "expire": "INTEGER"
-        },
-        "tk_users": {
-            "userId": "TEXT PRIMARY KEY",
-            "uniqueId": "TEXT",
-            "nickname": "TEXT",
-            "avatarLarger": "TEXT",
-            "avatarMedium": "TEXT",
-            "avatarThumb": "TEXT",
-            "link": "TEXT",
-            "risk": "INTEGER",
-            "canExpPlaylist": "BOOLEAN",
-            "commentSetting": "INTEGER",
-            "commerceUser": "BOOLEAN",
-            "downloadSetting": "INTEGER",
-            "duetSetting": "INTEGER",
-            "followingVisibility": "INTEGER",
-            "ftc": "BOOLEAN",
-            "isADVirtual": "BOOLEAN",
-            "isEmbedBanned": "BOOLEAN",
-            "nickNameModifyTime": "INTEGER",
-            "openFavorite": "BOOLEAN",
-            "privateAccount": "BOOLEAN",
-            "profileEmbedPermission": "INTEGER",
-            "showPlayListTab": "BOOLEAN",
-            "relation": "INTEGER",
-            "secUid": "TEXT",
-            "secret": "BOOLEAN",
-            "signature": "TEXT",
-            "stitchSetting": "INTEGER",
-            "ttSeller": "BOOLEAN",
-            "verified": "BOOLEAN",
-            "diggCount": "INTEGER",
-            "followerCount": "INTEGER",
-            "followingCount": "INTEGER",
-            "friendCount": "INTEGER",
-            "heart": "INTEGER",
-            "heartCount": "INTEGER",
-            "videoCount": "INTEGER",
-            "logid": "TEXT",
-            "impr_id": "TEXT",
-            "desc": "TEXT",
-            "title": "TEXT",
-            "statusCode": "INTEGER",
-            "status_msg": "TEXT"
-        },
-        "tk_videos": {
-            "videoId": "INTEGER PRIMARY KEY",
-            "userName": "TEXT",
-            "expire": "INTEGER"
         },
         "tokens": {
             "name": "TEXT PRIMARY KEY",
@@ -533,6 +472,9 @@ class DBSchema(object):
             "agent0MoneyDelete": "INTEGER",
             "agent1MoneyDelete": "INTEGER",
             "member": "TEXT",
+            "email": "TEXT",
+            "firstName": "TEXT",
+            "lastName": "TEXT",
             "counts": "TEXT",
             "money": "TEXT",
             "endTime": "TEXT",
@@ -583,6 +525,9 @@ class DBSchema(object):
             "agent0MoneyDelete": "INTEGER",
             "agent1MoneyDelete": "INTEGER",
             "member": "TEXT",
+            "email": "TEXT",
+            "firstName": "TEXT",
+            "lastName": "TEXT",
             "counts": "TEXT",
             "money": "TEXT",
             "endTime": "TEXT",
@@ -612,6 +557,23 @@ class DBSchema(object):
             "diggCount": "INTEGER",
             "playCount": "INTEGER",
             "shareCount": "INTEGER",
+            "createTime": "INTEGER",
+            "updateTime": "INTEGER"
+        },
+        "video_targets": {
+            "id": "INTEGER PRIMARY KEY",
+            "uniqueId": "TEXT",
+            "videoId": "INTEGER",
+            "followerInit": "INTEGER",
+            "followerCurrent": "INTEGER",
+            "followerTarget": "INTEGER",
+            "diggInit": "INTEGER",
+            "diggCurrent": "INTEGER",
+            "diggTarget": "INTEGER",
+            "playInit": "INTEGER",
+            "playCurrent": "INTEGER",
+            "playTarget": "INTEGER",
+            "finished": "BOOLEAN",
             "createTime": "INTEGER",
             "updateTime": "INTEGER"
         }
