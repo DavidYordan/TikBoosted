@@ -204,7 +204,7 @@ class TikTokSpider(QRunnable):
             return updateTime
 
         except Exception as e:
-            Globals._Log.error(self.user, f'get_accounts: {e}')
+            Globals._Log.error(self.user, f'get_weight: {e}')
 
         finally:
             Globals._MUTEX_ACDICT.unlock()
@@ -261,6 +261,14 @@ class TikTokSpider(QRunnable):
                 continue
 
         temp_folders = glob.glob(os.path.join(os.getenv('TEMP'), 'playwright*'))
+        for folder in temp_folders:
+            try:
+                shutil.rmtree(folder)
+                print(f'Deleted folder: {folder}')
+            except Exception as e:
+                print(f'Error deleting folder {folder}: {e}')
+
+        temp_folders = glob.glob(os.path.join(os.getenv('TEMP'), 'chromium*', 'chrome-win', 'temp', 'playwright*'))
         for folder in temp_folders:
             try:
                 shutil.rmtree(folder)

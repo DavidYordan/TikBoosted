@@ -44,9 +44,12 @@ class Worker(QRunnable):
         loop.close()
 
 class AccountDialog(QDialog):
+    add_team_button_signal = pyqtSignal(dict, list, str)
+    add_team_stretch_signal = pyqtSignal()
+    clear_team_members_button_signal = pyqtSignal()
     update_income_signal = pyqtSignal(list)
-    update_team_signal = pyqtSignal(list, list)
     update_user_details_signal = pyqtSignal(dict)
+    update_team_members_label_signal = pyqtSignal(str)
 
     def __init__(
             self,
@@ -65,6 +68,7 @@ class AccountDialog(QDialog):
             self.products_table = 'products_america'
             self.users_table = 'agents_america' if is_agent else 'users_america'
         else:
+            Globals._Log.error('AccountDialog', f'Incorrect region: {region}')
             self.url_base = Globals._BASE_URL_ASIA
             self.token_name = 'asia_token'
             self.products_table = 'products_asia'
@@ -74,9 +78,12 @@ class AccountDialog(QDialog):
         self.row = row
         self.rsAccount = rsAccount
         self.session_admin = requests.Session()
+        self.add_team_button_signal.connect(self.add_team_button)
+        self.add_team_stretch_signal.connect(self.add_team_stretch)
+        self.clear_team_members_button_signal.connect(self.clear_team_members_button)
         self.update_income_signal.connect(self.update_income)
-        self.update_team_signal.connect(self.update_team)
         self.update_user_details_signal.connect(self.update_user_details)
+        self.update_team_members_label_signal.connect(self.update_team_members_label)
         self.userId = userId
         self.user_details = ''
         self.user = 'AccountDialog'
@@ -181,16 +188,19 @@ class AccountDialog(QDialog):
         totalCount = 0
         currentCount = 0
         money_records = []
+        invitationCode = ''
 
         try:
             if self.is_agent:
                 response = await self.request_with_admin('get', f'{self.url_base}/sqx_fast/agent/agent/list?page=1&limit=10&mobile={self.rsAccount}')
                 if response and 'page' in response:
                     self.update_user_details_signal.emit(response['page']['list'][0])
+                    invitationCode = response['page']['list'][0]['userId']
             else:
                 response = await self.request_with_admin('get', f'{self.url_base}/sqx_fast/user/{self.userId}')
                 if response and 'data' in response:
                     self.update_user_details_signal.emit(response['data']['userEntity'])
+                    invitationCode = response['data']['userEntity']['invitationCode']
         except Exception as e:
             Globals._Log.error(self.user, f'Failed to fetch user details: {e}')
 
@@ -262,9 +272,44 @@ class AccountDialog(QDialog):
         )
         vips = res.get('data', {}).get('list', '')
 
-        self.update_team_signal.emit(invite_records, vips)
+        self.clear_team_members_button_signal.emit()
+        self.update_team_members_label_signal.emit(f'Team ({len(invite_records)})')
+        
+        sorted_records = sorted(invite_records, key=lambda x: x['createTime'], reverse=True)
+        
+        for record in sorted_records:
+            data = await self.request_with_admin(
+                'get',
+                f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={record["userId"]}'
+            )
+            record['balance'] = data.get('data', {}).get('money', 0)
+
+            self.add_team_button_signal.emit(record, vips, invitationCode)
+
+        self.add_team_stretch_signal.emit()
         
         Globals._WS.toggle_components_signal.emit(True)
+
+    @pyqtSlot()
+    def add_team_stretch(self):
+        self.team_members_layout.addStretch()
+
+    @pyqtSlot(dict, list, str)
+    def add_team_button(self, record, vips, invitationCode):
+        userId = record['userId']
+        button_text = f"{record['balance']}|{record['money']}|{record['userName']}|{userId}|{record['createTime']}|{invitationCode}"
+        button = QPushButton(button_text)
+        button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        button.customContextMenuRequested.connect(lambda pos, b=button: self.recharge_menu(pos, b))
+        button.clicked.connect(lambda pos, b=button, v=vips: self.consume_menu(pos, b, v))
+        self.team_members_layout.addWidget(button)
+
+    @pyqtSlot()
+    def clear_team_members_button(self):
+        while self.team_members_layout.count():
+            child = self.team_members_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
     def get_token_from_database(self):
         res = Globals._SQL.read('tokens', condition=f'name="{self.token_name}"')
@@ -280,62 +325,97 @@ class AccountDialog(QDialog):
             self.get_token_from_database()
         Globals.thread_pool.start(Worker(self.update_money_worker))
 
-    async def on_product_selected(self, product, userId, phone):
-        productId, productName, productPrice = product.split('|')
+    # async def on_product_selected(self, product, userId, phone):
+    #     productId, productName, productPrice = product.split('|')
 
-        await self.request_with_admin(
+    #     await self.request_with_admin(
+    #         'get',
+    #         f'{self.url_base}/sqx_fast/user/{userId}'
+    #     )
+    #     res = await self.request_with_admin(
+    #         'get',
+    #         f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
+    #     )
+    #     money_diff = float(productPrice) - res.get('data', {}).get('money', 0)
+    #     if money_diff > 0:
+    #         res = await self.request_with_admin(
+    #             'post',
+    #             f'{self.url_base}/sqx_fast/user/addCannotMoney/{userId}/{productPrice}'
+    #         )
+    #         res = await self.request_with_admin(
+    #             'get',
+    #             f'{self.url_base}/sqx_fast/user/{userId}'
+    #         )
+    #         phone = res['data']['userEntity']['phone']
+    #         res = await self.request_with_admin(
+    #             'get',
+    #             f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
+    #         )
+        
+    #     if not phone:
+    #         res = await self.request_with_admin(
+    #             'get',
+    #             f'{self.url_base}/sqx_fast/user/{userId}'
+    #         )
+    #         phone = res['data']['userEntity']['phone']
+
+    #     session = requests.Session()
+    #     res = session.post(f'{self.url_base}/sqx_fast/app/Login/registerCode?password=d135246&phone={phone}')
+    #     try:
+    #         token = res.json()['token']
+    #     except Exception as e:
+    #         Globals._Log.error(self.user, f'{e}')
+    #         return
+    #     session.headers.update({'Token': token})
+    #     if productName == 'vip':
+    #         res = session.get(f'{self.url_base}/sqx_fast/app/order/insertVipOrders?vipDetailsId={productId}&time={int(time.time()*1000)}')
+    #         try:
+    #             orderId = res.json()['data']['ordersId']
+    #         except Exception as e:
+    #             Globals._Log.error(self.user, f'{e}')
+    #             return
+    #     else:
+    #         res = session.get(f'{self.url_base}/sqx_fast/app/order/insertCourseOrders?courseId={productId}&time={int(time.time()*1000)}')
+    #         try:
+    #             orderId = res.json()['data']['orders']['ordersId']
+    #         except Exception as e:
+    #             Globals._Log.error(self.user, f'{e}')
+    #             return
+    #     time.sleep(1)
+    #     res = session.post(
+    #         f'{self.url_base}/sqx_fast/app/order/payOrders',
+    #         headers={'Content-Type': 'application/x-www-form-urlencoded'},
+    #         data=f'orderId={orderId}'
+    #     )
+    #     await self.update_money_worker()
+
+    async def on_consume_selected(self, product, button_text):
+        productId, _, _ = product.split('|')
+        _, _, _, userId, _, invitationCode = button_text.split('|')
+        
+        res = await self.request_with_admin(
             'get',
             f'{self.url_base}/sqx_fast/user/{userId}'
         )
-        res = await self.request_with_admin(
-            'get',
-            f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
-        )
-        money_diff = float(productPrice) - res.get('data', {}).get('money', 0)
-        if money_diff > 0:
-            res = await self.request_with_admin(
-                'post',
-                f'{self.url_base}/sqx_fast/user/addCannotMoney/{userId}/{productPrice}'
-            )
-            res = await self.request_with_admin(
-                'get',
-                f'{self.url_base}/sqx_fast/user/{userId}'
-            )
-            phone = res['data']['userEntity']['phone']
-            res = await self.request_with_admin(
-                'get',
-                f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
-            )
-        
+        phone = res['data']['userEntity']['phone']
         if not phone:
-            res = await self.request_with_admin(
-                'get',
-                f'{self.url_base}/sqx_fast/user/{userId}'
-            )
-            phone = res['data']['userEntity']['phone']
+            Globals._Log.error(self.user, f'Not phone: {e}')
 
         session = requests.Session()
-        res = session.post(f'{self.url_base}/sqx_fast/app/Login/registerCode?password=d135246&phone={phone}')
+        res = session.post(f'{self.url_base}/sqx_fast/app/Login/registerCode?password={invitationCode}{phone}&phone={phone}')
         try:
             token = res.json()['token']
         except Exception as e:
             Globals._Log.error(self.user, f'{e}')
             return
         session.headers.update({'Token': token})
-        if productName == 'vip':
-            res = session.get(f'{self.url_base}/sqx_fast/app/order/insertVipOrders?vipDetailsId={productId}&time={int(time.time()*1000)}')
-            try:
-                orderId = res.json()['data']['ordersId']
-            except Exception as e:
-                Globals._Log.error(self.user, f'{e}')
-                return
-        else:
-            res = session.get(f'{self.url_base}/sqx_fast/app/order/insertCourseOrders?courseId={productId}&time={int(time.time()*1000)}')
-            try:
-                orderId = res.json()['data']['orders']['ordersId']
-            except Exception as e:
-                Globals._Log.error(self.user, f'{e}')
-                return
+
+        res = session.get(f'{self.url_base}/sqx_fast/app/order/insertVipOrders?vipDetailsId={productId}&time={int(time.time()*1000)}')
+        try:
+            orderId = res.json()['data']['ordersId']
+        except Exception as e:
+            Globals._Log.error(self.user, f'{e}')
+            return
         time.sleep(1)
         res = session.post(
             f'{self.url_base}/sqx_fast/app/order/payOrders',
@@ -343,6 +423,54 @@ class AccountDialog(QDialog):
             data=f'orderId={orderId}'
         )
         await self.update_money_worker()
+
+    async def on_recharge_selected(self, text, userId):
+        _, rechargePrice = text.split('|')
+
+        await self.request_with_admin(
+            'get',
+            f'{self.url_base}/sqx_fast/user/{userId}'
+        )
+        await self.request_with_admin(
+            'get',
+            f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
+        )
+        await self.request_with_admin(
+            'post',
+            f'{self.url_base}/sqx_fast/user/addCannotMoney/{userId}/{rechargePrice}'
+        )
+        await self.request_with_admin(
+            'get',
+            f'{self.url_base}/sqx_fast/user/{userId}'
+        )
+        await self.request_with_admin(
+            'get',
+            f'{self.url_base}/sqx_fast/moneyDetails/selectUserMoney?userId={userId}'
+        )
+        
+        await self.update_money_worker()
+
+    def consume(self, recharge_text, button_text):
+        Globals.thread_pool.start(Worker(self.on_consume_selected, recharge_text, button_text))
+
+    def recharge(self, recharge_text, button_text):
+        _, _, _, userId, _, _ = button_text.split('|')
+        Globals.thread_pool.start(Worker(self.on_recharge_selected, recharge_text, userId))
+
+    def consume_menu(self, pos, button, vips):
+        menu = QMenu()
+        for vip in vips:
+            text = f'{vip["id"]}|vip|{vip["money"]}'
+            action = menu.addAction(text)
+            action.triggered.connect(lambda _, p=text, b=button: self.consume(p, b.text()))
+        menu.exec(QCursor.pos())
+
+    def recharge_menu(self, pos, button):
+        menu = QMenu()
+        text = 'recharge|4'
+        action = menu.addAction(text)
+        action.triggered.connect(lambda _, t=text, b=button: self.recharge(t, b.text()))
+        menu.exec(QCursor.pos())
 
     def setup_ui(self):
         main_layout = QHBoxLayout(self)
@@ -382,28 +510,28 @@ class AccountDialog(QDialog):
 
         self.setLayout(main_layout)
 
-    def show_menu(self, pos, button, vips):
-        products = Globals._SQL.read(self.products_table)
-        sorted_products = sorted(products, key=lambda x: x[12])
-        menu = QMenu()
-        for vip in vips:
-            text = f'{vip["id"]}|vip|{vip["money"]}'
-            action = menu.addAction(text)
-            action.triggered.connect(lambda _, p=text, b=button: self.trigger_product_selected(p, b.text()))
-        for product in sorted_products:
-            text = f'{product[0]}|{product[9]}|{product[12]}'
-            action = menu.addAction(text)
-            action.triggered.connect(lambda _, p=text, b=button: self.trigger_product_selected(p, b.text()))
-        menu.exec(QCursor.pos())
+    # def show_menu(self, pos, button, vips):
+    #     products = Globals._SQL.read(self.products_table)
+    #     sorted_products = sorted(products, key=lambda x: x[12])
+    #     menu = QMenu()
+    #     for vip in vips:
+    #         text = f'{vip["id"]}|vip|{vip["money"]}'
+    #         action = menu.addAction(text)
+    #         action.triggered.connect(lambda _, p=text, b=button: self.trigger_product_selected(p, b.text()))
+    #     for product in sorted_products:
+    #         text = f'{product[0]}|{product[9]}|{product[12]}'
+    #         action = menu.addAction(text)
+    #         action.triggered.connect(lambda _, p=text, b=button: self.trigger_product_selected(p, b.text()))
+    #     menu.exec(QCursor.pos())
 
-    def trigger_product_selected(self, product, button_text):
-        userId, _, _ = button_text.split('|')
-        res = Globals._SQL.read(self.users_table, ['phone'], f'userId="{userId}"')
-        try:
-            phone = res[0][0]
-        except:
-            phone = None
-        Globals.thread_pool.start(Worker(self.on_product_selected, product, userId, phone))
+    # def trigger_product_selected(self, product, button_text):
+    #     userId, _, _ = button_text.split('|')
+    #     res = Globals._SQL.read(self.users_table, ['phone'], f'userId="{userId}"')
+    #     try:
+    #         phone = res[0][0]
+    #     except:
+    #         phone = None
+    #     Globals.thread_pool.start(Worker(self.on_product_selected, product, userId, phone))
 
     @pyqtSlot(list)
     def update_income(self, datas):
@@ -449,25 +577,6 @@ class AccountDialog(QDialog):
 
         self.income_details_layout.addStretch()
 
-    @pyqtSlot(list, list)
-    def update_team(self, datas, vips):
-        sorted_datas = sorted(datas, key=lambda x: x['createTime'], reverse=True)
-        self.team_members_label.setText(f'Team ({len(sorted_datas)})')
-
-        while self.team_members_layout.count():
-            child = self.team_members_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-
-        for item in sorted_datas[:50]:
-            button_text = f"{item['userId']}|{item['money']}|{item['createTime']}"
-            button = QPushButton(button_text)
-            button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            button.customContextMenuRequested.connect(lambda pos, b=button, v=vips: self.show_menu(pos, b, v))
-            self.team_members_layout.addWidget(button)
-        
-        self.team_members_layout.addStretch()
-
     @pyqtSlot(dict)
     def update_user_details(self, user_data):
         details = ''
@@ -484,3 +593,7 @@ class AccountDialog(QDialog):
                 details += f"{key}: {value}\n"
 
         self.user_details_text_edit.setText(details)
+
+    @pyqtSlot(str)
+    def update_team_members_label(self, text):
+        self.team_members_label.setText(text)

@@ -15,11 +15,22 @@ class DyTikTokApi(TikTokApi):
             override_browser_args = ["--headless=new"]
             headless = False
         self.browser = await self.playwright.chromium.launch(
+            # proxy={"server": "http://per-context"},
+            # executable_path='C:\Program Files\Google\Chrome\Application\chrome.exe',
             headless=headless,
             args=override_browser_args,
         )
+        # self.browser = await self.playwright.chromium.launch(
+        #     # proxy={"server": "http://per-context"},
+        #     headless=headless,
+        #     args=override_browser_args,
+        # )
 
         self.num_sessions = len(self.sessions)
+        print(headless)
+        print(override_browser_args)
+        print(self.browser)
+        
 
     async def create_session(
         self,
@@ -27,9 +38,14 @@ class DyTikTokApi(TikTokApi):
         sleep_after=3,
         starting_url="https://www.tiktok.com",
     ):
-        await super().__create_session(
-            proxy=proxy,
-            url=starting_url,
-            sleep_after=sleep_after
-        )
+        print(proxy)
+        try:
+            await super()._TikTokApi__create_session(
+                proxy=proxy,
+                url=starting_url,
+                sleep_after=sleep_after
+            )
+        except Exception as e:
+            print(f'dycreate_sessiong error: {e}')
+        print(f'dycreate_session: {self.sessions}')
 

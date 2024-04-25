@@ -1,10 +1,12 @@
 import asyncio
+import glob
+import numpy as np
+import os
 import psutil
-import random
+import shutil
 import time
 from queue import PriorityQueue, Queue
 from PyQt6.QtCore import (
-    QMutex,
     QRunnable
 )
 
@@ -18,34 +20,32 @@ class TikTokSpider(QRunnable):
 
         self.api = DyTikTokApi()
         self.accounts_columns = list(DBSchema.tables['accounts'].keys())
-        self.deleted_accounts = set()
-        self.lock_session = QMutex()
-        self.video_columns = list(DBSchema.tables['videos'].keys())
         self.is_running = False
+        self.used_ports = {}
         self.queue = PriorityQueue()
-        self.proxies = [
-            {'server': 'http://127.0.0.1:30001'},
-            {'server': 'http://127.0.0.1:30002'},
-            {'server': 'http://127.0.0.1:30003'},
-            {'server': 'http://127.0.0.1:30004'},
-            {'server': 'http://127.0.0.1:30005'},
-            {'server': 'http://127.0.0.1:30006'},
-            {'server': 'http://127.0.0.1:30007'},
-            {'server': 'http://127.0.0.1:30008'},
-            {'server': 'http://127.0.0.1:30009'},
-            {'server': 'http://127.0.0.1:30010'},
-        ]
-        self.proxies_used = set()
         self.session_indexies = Queue(5)
         self.setAutoDelete(False)
+        self.video_columns = list(DBSchema.tables['videos'].keys())
         self.user = 'TikTokSpider'
 
         Globals._Log.info(self.user, 'Successfully initialized.')
 
     async def get_user_info(self, session_index, account, id, status):
-        user_info = await self.api.user(username=account).info(session_index)
-        now = int(time.time())
-        updateTime = now + 43200 if status == '5.退學' else now
+        Globals._Log.debug(self.user, f'test4: {session_index}')
+        Globals._Log.debug(self.user, f'test4.1: {self.api.sessions}')
+        start = time.time()
+        user_info = await self.api.user(username=account).info(session_index=session_index)
+        now = time.time()
+        Globals._Log.debug(self.user, 'test5')
+
+        Globals._MUTEX_XRAY.lock()
+        Globals._Log.debug(self.user, 'test5.1')
+        Globals.xray_dict[self.used_ports[session_index]]['response_times'].append(now - start)
+        Globals._Log.debug(self.user, 'test5.2')
+        Globals._MUTEX_XRAY.unlock()
+
+        Globals._Log.debug(self.user, 'test6')
+        updateTime = int(now) + 43200 if status == '5.退學' else int(now)
         user_data = user_info['userInfo']['user']
         stats = user_info['userInfo']['stats']
         datas = {
@@ -70,8 +70,10 @@ class TikTokSpider(QRunnable):
             'updateTime': updateTime
         }
 
+        Globals._Log.debug(self.user, 'test7')
         Globals._WS.update_account_table_signal.emit({account: datas})
 
+        Globals._Log.debug(self.user, 'test8')
         Globals._WS.database_operation_signal.emit('upsert',{
             'table_name': 'accounts',
             'columns': list(datas.keys()),
@@ -80,9 +82,11 @@ class TikTokSpider(QRunnable):
         }, None)
 
     async def get_user_videos(self, session_index, account, status):
+        Globals._Log.debug(self.user, 'test9')
         videos = []
         createTimeInit = int(time.time())
-        async for video in self.api.user(username=account).videos(session_index):
+        Globals._Log.debug(self.user, 'test10')
+        async for video in self.api.user(username=account).videos(session_index=session_index):
             video_info = video.as_dict
             title = ''
             if 'contents' in video_info:
@@ -90,7 +94,7 @@ class TikTokSpider(QRunnable):
             stats = video_info['stats']
             createTime = video_info['createTime']
             values = {
-                'videoId': video_info['id'],
+                'videoId': int(video_info['id']),
                 'account': account,
                 'title': title,
                 'collectCount': stats['collectCount'],
@@ -104,6 +108,7 @@ class TikTokSpider(QRunnable):
             videos.append(values)
             if createTime < createTimeInit:
                 createTimeInit = createTime
+        Globals._Log.debug(self.user, 'test11')
         if not len(videos):
             return
         Globals._WS.database_operation_signal.emit('bulk_upsert',{
@@ -112,6 +117,9 @@ class TikTokSpider(QRunnable):
             'data': videos,
             'unique_columns': ['videoId']
         }, None)
+
+        Globals._Log.debug(self.user, 'test12')
+        Globals._MUTEX_ACDICT.lock()
         accounts_createTime = Globals.accounts_dict.get(account, {}).get('createTime', 0)
         if createTimeInit < accounts_createTime:
             Globals._WS.database_operation_signal.emit('update',{
@@ -119,27 +127,71 @@ class TikTokSpider(QRunnable):
                 'updates': {'createTime': createTimeInit},
                 'condition': f'account="{account}"'
             }, None)
+            Globals.accounts_dict[account]['createTime'] = createTimeInit
+        Globals._MUTEX_ACDICT.unlock()
+
+        Globals._Log.debug(self.user, 'test13')
         if status == '5.退學':
             return
-        Globals._WS.update_orderIssuer_order_signal.emit(videos)
+        
+        Globals._Log.debug(self.user, 'test14')
         Globals._MUTEX_BINDING.lock()
         if account in Globals.binging_dict:
-            Globals._WS.orderIssuer_binding_check_signal.emit(account)
+            Globals._WS.orderIssuer_binding_check_signal.emit(videos)
+        else:
+            Globals._WS.update_orderIssuer_order_signal.emit(videos)
         Globals._MUTEX_BINDING.unlock()
 
-    def choice_proxy(self):
-        indexies = set([i for i in range(len(self.proxies))])
-        proxy_index = random.choice(list(indexies - self.proxies_used))
-        self.proxies_used.add(proxy_index)
-        Globals._Log.debug(self.user, f'Successfully selected a proxy.')
-        return self.proxies[proxy_index]
+    def choice_proxy(self, session_index):
+        Globals._MUTEX_XRAY.lock()
+        try:
+            best_port = None
+            best_score = float('inf')
+            anti_crawl_weight = 2.0
+            speed_weight = 1.0
+
+            max_anti_crawl = max((data['anti_crawl_count'] for data in Globals.xray_dict.values()), default=1)
+            max_speed = max((max(data['response_times'], default=0) for data in Globals.xray_dict.values()), default=1)
+
+            for port, data in Globals.xray_dict.items():
+                if port in self.used_ports.values():
+                    continue
+
+                if not data['response_times']:
+                    self.used_ports[session_index] = port
+                    return
+
+                avg_speed = np.mean(data['response_times'])
+                normalized_anti_crawl = data['anti_crawl_count'] / max_anti_crawl
+                normalized_speed = avg_speed / max_speed
+                
+                score = (normalized_anti_crawl * anti_crawl_weight) + (normalized_speed * speed_weight)
+
+                Globals._Log.debug(self.user, f'caculate score {port} - {data}: {score}')
+
+                if score < best_score:
+                    best_score = score
+                    best_port = port
+
+            self.used_ports[session_index] = best_port
+            Globals._Log.debug(self.user, f'Successfully selected a proxy: {best_port}')
+    
+        except Exception as e:
+            Globals._Log.debug(self.user, f'Successfully selected a proxy: {best_port}')
+
+        finally:
+            Globals._MUTEX_XRAY.unlock()
 
     def get_accounts(self):
         Globals._MUTEX_ACDICT.lock()
         accounts = Globals.accounts_dict.keys()
         Globals._MUTEX_ACDICT.unlock()
+        now = int(time.time())
         for account in accounts:
-            self.queue.put((self.get_weight(account), account))
+            weight = self.get_weight(account)
+            if weight - now > 60:
+                continue
+            self.queue.put((weight, account))
 
     def get_weight(self, account):
         Globals._MUTEX_ACDICT.lock()
@@ -169,81 +221,80 @@ class TikTokSpider(QRunnable):
             id = Globals.accounts_dict[account]['id']
             status = Globals.accounts_dict[account]['status']
             Globals._MUTEX_ACDICT.unlock()
+            Globals._Log.debug(self.user, 'test1')
             await self.get_user_info(session_index, account, id, status)
+            Globals._Log.debug(self.user, 'test2')
             await self.get_user_videos(session_index, account, status)
-            self.queue.put((self.get_weight(account), account))
+            Globals._Log.debug(self.user, 'test3')
 
         except KeyError as k:
             if 'user' in str(k):
                 Globals._Log.warning(self.user, f'The homepage of {account} cannot be found: {k}')
                 # updateTime = int(time.time()) + 43200
-                updateTime = int(time.time())
+                updateTime = int(time.time()) + 300
                 Globals._WS.update_account_table_signal.emit({account: {'updateTime': updateTime}})
                 Globals._WS.database_operation_signal.emit('upsert', {
                     'table_name': 'accounts',
                     'columns': ['id', 'updateTime'],
-                    'values': [Globals.accounts_dict[account]['id'], updateTime],
+                    'values': [id, updateTime],
                     'unique_columns': ['id']
                 }, None)
                 self.queue.put((updateTime, account))
             else:
-                Globals._Log.error(self.user, f'type: {type(k)}, details: {k}')
+                Globals._Log.error(self.user, f'KeyError: {type(k)}, details: {k}')
                 self.queue.put((self.get_weight(account), account))
 
         except Exception as e:
-            Globals._Log.error(self.user, f'type: {type(e)}, details: {e}')
+            Globals._Log.error(self.user, f'Exception: {type(e)}, details: {e}')
             self.queue.put((self.get_weight(account), account))
 
         finally:
-            self.lock_session.lock()
             self.session_indexies.put(session_index)
-            self.lock_session.unlock()
 
     async def main(self):
         self.is_running = True
         try:
-            await self.api.create_chromium(headless=False, override_browser_args=['--window-position=9999,9999'])
+            # await self.api.create_chromium(headless=False, override_browser_args=['--window-position=9999,9999'])
+            await self.api.create_chromium(headless=False, override_browser_args=['--incognito'])
         except Exception as e:
-            print(str(e))
+            Globals._Log.error(self.user, f'create_chromium: {e}')
         try:
             while self.is_running and Globals.is_app_running:
                 if self.queue.empty():
                     self.get_accounts()
+                    if self.queue.empty:
+                        time.sleep(3)
+                        continue
 
                 weight, account = self.queue.get()
-                if account in self.deleted_accounts:
-                    self.deleted_accounts.discard(account)
-                    Globals._Log.info(self.user, f'Deleted {account}')
-                    continue
-                if time.time() - weight < 60:
-                    self.queue.put((weight, account))
-                    continue
 
                 Globals._Log.debug(self.user, f"total: {self.queue.qsize()+1}, weight: {weight}, account: {account}")
 
-                self.lock_session.lock()
                 try:
                     if self.session_indexies.qsize():
                         session_index = self.session_indexies.get()
                     else:
                         if len(self.api.sessions) < 5:
-                            await self.api.create_session(self.choice_proxy())
-                            session_index = len(self.api.sessions) - 1
+                            session_index = len(self.api.sessions)
+                            self.choice_proxy(session_index)
+                            await self.api.create_session()
+                            # await self.api.create_session({'server': f'http://127.0.0.1:40011'})
+                            # await self.api.create_session({'server': f'http://127.0.0.1:{self.used_ports[session_index]}'})
                         else:
-                            Globals._Log.debug(self.user, f'{self.api.sessions}')
+                            self.queue.put((weight, account))
+                            Globals._Log.debug(self.user, f'{account} wait session')
+                            time.sleep(1)
+                            continue
 
                 except Exception as e:
                     Globals._Log.error(self.user, f'main: {e}')
 
-                finally:
-                    self.lock_session.unlock()
+                await self.run_session(account, session_index)
 
-                asyncio.run(asyncio.run, self.run_session(account, session_index))
-
-                asyncio.sleep(1)
+                time.sleep(1)
         finally:
             self.is_running = False
-            self.api.close_sessions()
+            await self.api.close_sessions()
 
     def run(self):
         asyncio.run(self.main())
@@ -258,8 +309,20 @@ class TikTokSpider(QRunnable):
     def terminate_playwright_processes(self):
         for process in psutil.process_iter(['pid', 'name', 'exe']):
             try:
-                if 'playwright' in process.info['exe']:
+                path = process.info['exe']
+                if 'playwright' in path:
+                    process.terminate()
+                    process.wait()
+                elif 'chrome' in path and 'chrome-win' in path:
                     process.terminate()
                     process.wait()
             except:
                 continue
+
+        temp_folders = glob.glob(os.path.join(os.getenv('TEMP'), 'playwright*'))
+        for folder in temp_folders:
+            try:
+                shutil.rmtree(folder)
+                print(f'Deleted folder: {folder}')
+            except Exception as e:
+                print(f'Error deleting folder {folder}: {e}')

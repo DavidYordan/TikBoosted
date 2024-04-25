@@ -4,3 +4,6 @@ test*
 /config/*
 /logs/*
 /temp
+*.txt
+*.json
+*.log

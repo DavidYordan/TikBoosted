@@ -9,6 +9,7 @@ current_dir = os.getcwd()
 datas = [
     (os.path.join(current_dir, 'dist', 'TikBoosted.exe'), 'dist'),
     (os.path.join(current_dir, 'img', 'TikBoostedResourceExtractor.ico'), 'img'),
+    (os.path.join(current_dir, 'xray', 'xray.exe'), 'xray'),
 ]
 
 a = Analysis(

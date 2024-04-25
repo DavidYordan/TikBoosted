@@ -26,7 +26,8 @@ class OrderIssuer(QRunnable):
         self.server_digg = [2327, 3558]
         # self.server_play = [1790]
         # self.server_play = [1757]
-        self.server_play = [2787]
+        self.server_play = [2830]
+        # self.server_play = [2787]
         self.session = requests.Session()
         self.setAutoDelete(False)
         self.temp_dict = {}
@@ -126,7 +127,7 @@ class OrderIssuer(QRunnable):
                 return
             Globals._Log.debug(self.user, f'{follower} - {digg} - {play}')
             if not self.check_video(videoId, 'play'):
-                self.make_play_order(uniqueId, videoId, follower, digg, play, playTarget)
+                self.make_play_order(uniqueId, videoId, follower, digg, play, followerTarget, diggTarget, playTarget)
             if not self.check_video(videoId, 'digg'):
                 self.make_digg_order(uniqueId, videoId, follower, digg, play, diggTarget, followerTarget)
             if not self.check_video(uniqueId, 'follower'):
@@ -188,7 +189,7 @@ class OrderIssuer(QRunnable):
         try:
             for video in videos:
                 createTime = video['createTime']
-                if (now - createTime) > (60*60*24*3):
+                if (now - createTime) > (60*60*24):
                     continue
                 videoId = video['videoId']
                 account = video['account']
@@ -334,7 +335,7 @@ class OrderIssuer(QRunnable):
         except Exception as e:
             Globals._Log.error(self.user, f'make_follower_order: {e}')
 
-    def make_play_order(self, uniqueId, videoId, follower, digg, play, playTarget):
+    def make_play_order(self, uniqueId, videoId, follower, digg, play, followerTarget, diggTarget, playTarget):
         try:
             link = f'https://www.tiktok.com/@{uniqueId}/video/{videoId}'
             if play < 5000:
@@ -351,6 +352,14 @@ class OrderIssuer(QRunnable):
             elif play > max(50, digg) * 30 or play > max(100, follower) * 180:
                 Globals._Log.debug(self.user, f'play > max(50, digg) * 30 or play > max(100, follower) * 180')
                 return
+            elif follower > followerTarget and digg > diggTarget:
+                Globals._Log.debug(self.user, f'follower > followerTarget and digg > diggTarget')
+                self.safe_put((5, ('add_order', {
+                    'action': 'add',
+                    'service': self.server_play[0],
+                    'link': link,
+                    'quantity': max(100, playTarget - play)
+                })))
             elif play > playTarget or play > max(50, digg) * 22 or play > max(100, follower) * 132:
                 Globals._Log.debug(self.user, f'play > playTarget or play > max(50, digg) * 20 or play > max(100, follower) * 120')
                 self.safe_put((5, ('add_order', {

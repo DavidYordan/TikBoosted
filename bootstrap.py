@@ -36,7 +36,7 @@ def choose_directory():
     return path
 
 def extract_resources(source_dir, target_dir):
-    resource_paths = ['dist']
+    resource_paths = ['dist', 'xray']
     for resource_path in resource_paths:
         full_source_path = os.path.join(source_dir, resource_path)
         full_target_path = os.path.join(target_dir, resource_path)

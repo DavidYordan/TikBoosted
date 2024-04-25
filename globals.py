@@ -65,6 +65,7 @@ class Globals(QObject):
     _Log = Logging(_log_textedit, _log_label)
     _MUTEX_ACDICT = QMutex()
     _MUTEX_BINDING = QMutex()
+    _MUTEX_XRAY = QMutex()
     _ORDERISSUER_PARAMS = {}
     _PROXY_TW = ''
     _PROXY_US = ''
@@ -85,6 +86,7 @@ class Globals(QObject):
     session_admin_america = requests.Session()
     session_admin_aisa = requests.Session()
     thread_pool = QThreadPool.globalInstance()
+    xray_dict = {}
 
     @classmethod
     async def get_token_with_playwright(cls, region):

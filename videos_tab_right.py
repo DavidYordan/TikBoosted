@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget
 )
+from queue import Queue
 
 from globals import Globals
 
@@ -280,7 +281,15 @@ class TargetDialog(QDialog):
         self.btn_accept.setEnabled(False)
 
     def on_accept(self):
+        q = Queue()
+        Globals._WS.database_operation_signal.emit('read', {
+            'table_name': 'video_targets',
+            'columns': ['MAX(id)']
+        }, q)
+        max_id = q.get()[0][0] + 1
         data = {
+            'client': Globals._CLIENT_ID,
+            'id': max_id,
             'uniqueId': self.account,
             'videoId': self.videoId,
             'followerInit': self.init_followerCount,
@@ -295,7 +304,7 @@ class TargetDialog(QDialog):
         if self.validate_final_counts():
             Globals._WS.database_operation_signal.emit('insert', {
                 'table_name': 'video_targets',
-                'columns': ['uniqueId', 'videoId', 'followerInit', 'followerTarget', 'diggInit', 'diggTarget', 'playInit', 'playTarget', 'createTime', 'finished'],
+                'columns': ['client', 'id', 'uniqueId', 'videoId', 'followerInit', 'followerTarget', 'diggInit', 'diggTarget', 'playInit', 'playTarget', 'createTime', 'finished'],
                 'data': data
             }, None)
             Globals._MUTEX_BINDING.lock()

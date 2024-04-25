@@ -31,20 +31,21 @@ if __name__ == '__main__':
 
 from accounts_tab import AccountsTab
 from agents_america_tab import AgentsAmericaTab
-from agents_asia_tab import AgentsAsiaTab
+# from agents_asia_tab import AgentsAsiaTab
 from config_dialog import ConfigDialog
 from globals import Globals
 from google_sync import GoogleSync
 from products_america_tab import ProductsAmericaTab
-from products_asia_tab import ProductsAsiaTab
+# from products_asia_tab import ProductsAsiaTab
 from progress_dialog import ProgressDialog
 from orderIssuer import OrderIssuer
 from telegram_bot import TelegramBot
 from tiktok_spider import TikTokSpider
 from users_america_tab import UsersAmericaTab
-from users_asia_tab import UsersAsiaTab
+# from users_asia_tab import UsersAsiaTab
 from videos_tab import VideosTab
 from videos_tab_right import VideosTabRight
+from xrayProcessor import XrayProcessor
 
 class SearchDialog(QDialog):
     def __init__(self, parent):
@@ -161,6 +162,8 @@ class TikBoosted(QMainWindow):
         Globals._WS.orderIssuer_binding_check_signal.connect(self.orderIssuer_binding_check)
         Globals._WS.update_orderIssuer_order_signal.connect(self.videos_to_orderIssuer)
 
+        self.xrayProcessor = XrayProcessor()
+
         self.user = 'TikBoosted'
 
         Globals._Log.info(self.user, 'Successfully initialized.')
@@ -235,12 +238,21 @@ class TikBoosted(QMainWindow):
         self.action_telegram_bot_run = QAction('Run Bot', self)
         self.action_telegram_bot_run.triggered.connect(self.telegram_bot_run)
         self.action_telegram_bot_stop = QAction('Run Bot', self)
+        self.action_telegram_bot_stop.setEnabled(False)
         self.action_telegram_bot_stop.triggered.connect(self.telegram_bot_stop)
         action_telegram_bot_test = QAction('Send Menu Test', self)
         action_telegram_bot_test.triggered.connect(lambda :Globals._WS.telegram_bot_signal.emit('send_text', {}))
         action_telegram_bot_file = QAction('Send Photo Test', self)
         action_telegram_bot_file.triggered.connect(lambda :Globals._WS.telegram_bot_signal.emit('send_photo', {}))
-        menu_test.addActions([self.action_telegram_bot_run, self.action_telegram_bot_stop, action_telegram_bot_test, action_telegram_bot_file])
+        self.action_xray_run = QAction('Run Xray', self)
+        self.action_xray_run.triggered.connect(self.xray_run)
+        self.action_xray_stop = QAction('Stop Xray', self)
+        self.action_xray_stop.setEnabled(False)
+        self.action_xray_stop.triggered.connect(self.xray_stop)
+        menu_test.addActions([
+            self.action_telegram_bot_run, self.action_telegram_bot_stop, action_telegram_bot_test, action_telegram_bot_file,
+            self.action_xray_run, self.action_xray_stop
+        ])
 
     def create_main_panel(self):
         central_widget = QWidget(self)
@@ -294,25 +306,25 @@ class TikBoosted(QMainWindow):
 
         self.tab_left.addTab(self.users_america_tab, 'UserAmer')
 
-        self.users_asia_tab = UsersAsiaTab(
-            self.tab_left
-        )
-        self.tab_left.addTab(self.users_asia_tab, 'UserAsia')
+        # self.users_asia_tab = UsersAsiaTab(
+        #     self.tab_left
+        # )
+        # self.tab_left.addTab(self.users_asia_tab, 'UserAsia')
 
         self.agents_america_tab = AgentsAmericaTab(
             self.tab_left
         )
         self.tab_left.addTab(self.agents_america_tab, 'AgenAmer')
 
-        self.agents_asia_tab = AgentsAsiaTab(
-            self.tab_left
-        )
-        self.tab_left.addTab(self.agents_asia_tab, 'AgenAsia')
+        # self.agents_asia_tab = AgentsAsiaTab(
+        #     self.tab_left
+        # )
+        # self.tab_left.addTab(self.agents_asia_tab, 'AgenAsia')
 
-        self.products_asia_tab = ProductsAsiaTab(
-            self.tab_left
-        )
-        self.tab_left.addTab(self.products_asia_tab, 'ProAsia')
+        # self.products_asia_tab = ProductsAsiaTab(
+        #     self.tab_left
+        # )
+        # self.tab_left.addTab(self.products_asia_tab, 'ProAsia')
 
         self.products_america_tab = ProductsAmericaTab(
             self.tab_left
@@ -431,6 +443,17 @@ class TikBoosted(QMainWindow):
     @pyqtSlot(list)
     def videos_to_orderIssuer(self, videos):
         self.orderIssuer.safe_put((5, ('calculate_orders', {'videos': videos})))
+
+    def xray_run(self):
+        if not self.xrayProcessor.is_running:
+            self.xrayProcessor.start_task()
+        self.action_xray_run.setEnabled(False)
+        self.action_xray_stop.setEnabled(True)
+
+    def xray_stop(self):
+        self.xrayProcessor.stop_task()
+        self.action_xray_run.setEnabled(True)
+        self.action_xray_stop.setEnabled(False)
 
 if __name__ == '__main__':
     os.environ['PLAYWRIGHT_BROWSERS_PATH'] = './temp'

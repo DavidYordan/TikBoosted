@@ -296,9 +296,11 @@ class AccountsTab(QWidget):
         
         try:
             if is_agent:
-                res = Globals._SQL.read('agents_america' if region == '美洲' else 'agents_asia', condition=f'mobile="{rsAccount}"')
+                res = Globals._SQL.read('agents_america', condition=f'mobile="{rsAccount}"')
+                # res = Globals._SQL.read('agents_america' if region == '美洲' else 'agents_asia', condition=f'mobile="{rsAccount}"')
             else:
-                res = Globals._SQL.read('users_america' if region == '美洲' else 'users_asia', condition=f'phone="{rsAccount}"')
+                res = Globals._SQL.read('users_america', condition=f'phone="{rsAccount}"')
+                # res = Globals._SQL.read('users_america' if region == '美洲' else 'users_asia', condition=f'phone="{rsAccount}"')
             userId = res[0][0]
             Globals._Log.info(self.user, f'User ID {userId} retrieved successfully.')
             AccountDialog(self, row, region, userId, rsAccount, is_agent)
